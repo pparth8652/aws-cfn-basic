@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM Template to create a secure S3 bucket with SSE-S3, CORS, logging, versioning, lifecycle to Glacier, and tags
+
+Parameters:
+  BucketName:
+    Type: String
+    Description: Name of the S3 bucket
+
+  LoggingBucketName:
+    Type: String
+    Default: s3-bucket-access-logging-976193235153
+    Description: Name of existing bucket to store S3 access logs
+
+  AllowedOrigins:
+    Type: CommaDelimitedList
+    Description: List of allowed origins for CORS (comma-separated)
+
+  GlacierTransitionDays:
+    Type: Number
+    Default: 30
+    Description: Number of days after object creation to transition to Glacier
+
+  GlacierStorageClass:
+    Type: String
+    Default: GLACIER
+    AllowedValues:
+      - GLACIER
+      - DEEP_ARCHIVE
+      - GLACIER_IR
+    Description: Glacier storage class to transition objects to
+
+  TagEnvironment:
+    Type: String
+    Default: Dev
+
+  TagProject:
+    Type: String
+    Default: MyApp
+
+  TagClient:
+    Type: String
+    Default: Client1
+
+Resources:
+  SecureS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+            BucketKeyEnabled: true
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucketName
+        LogFilePrefix: !Sub "${BucketName}/"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: ["GET", "PUT", "POST", "DELETE"]
+            AllowedOrigins: !Ref AllowedOrigins
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Prefix: ""
+            Transitions:
+              - TransitionInDays: !Ref GlacierTransitionDays
+                StorageClass: !Ref GlacierStorageClass
+      Tags:
+        - Key: Environment
+          Value: !Ref TagEnvironment
+        - Key: Client
+          Value: !Ref TagClient
+        - Key: Project
+          Value: !Ref TagProject
+
+Outputs:
+  BucketArn:
+    Description: ARN of the created S3 bucket
+    Value: !GetAtt SecureS3Bucket.Arn
